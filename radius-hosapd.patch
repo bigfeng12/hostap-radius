@@ -1,0 +1,101 @@
+diff --git a/hostapd/Makefile b/hostapd/Makefile
+index 98ce1151f..cd8b6289c 100644
+--- a/hostapd/Makefile
++++ b/hostapd/Makefile
+@@ -260,11 +260,11 @@ endif
+ 
+ ifdef CONFIG_HS20
+ NEED_AES_OMAC1=y
+-CONFIG_PROXYARP=y
++#CONFIG_PROXYARP=y
+ endif
+ 
+ ifdef CONFIG_PROXYARP
+-CONFIG_L2_PACKET=y
++#CONFIG_L2_PACKET=y
+ endif
+ 
+ ifdef CONFIG_SUITEB
+diff --git a/hostapd/hostapd.eap_user b/hostapd/hostapd.eap_user
+index 00edc95af..470ad9e7c 100644
+--- a/hostapd/hostapd.eap_user
++++ b/hostapd/hostapd.eap_user
+@@ -61,12 +61,14 @@
+ "example user"	TLS
+ "DOMAIN\user"	MSCHAPV2	"password"
+ "gtc user"	GTC	"password"
+-"pax user"	PAX	"unknown"
+-"pax.user@example.com"	PAX	0123456789abcdef0123456789abcdef
+-"psk user"	PSK	"unknown"
+-"psk.user@example.com"	PSK	0123456789abcdef0123456789abcdef
+-"sake.user@example.com"	SAKE	0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+-"ttls"		TTLS
++# "pax user"	PAX	"unknown"
++# "pax.user@example.com"	PAX	0123456789abcdef0123456789abcdef
++# "psk user"	PSK	"unknown"
++# "psk.user@example.com"	PSK	0123456789abcdef0123456789abcdef
++# "sake.user@example.com"	SAKE	0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
++"tls"		TLS
++"utls"		WFA-UNAUTH-TLS
++"eap-ttls"		TTLS
+ "not anonymous"	PEAP
+ # Default to EAP-SIM and EAP-AKA based on fixed identity prefixes
+ "0"*		AKA,TTLS,TLS,PEAP,SIM
+@@ -90,6 +92,8 @@
+ "user"		MD5,GTC,MSCHAPV2	"password"	[2]
+ "test user"	MSCHAPV2	hash:000102030405060708090a0b0c0d0e0f	[2]
+ "ttls-user"	TTLS-PAP,TTLS-CHAP,TTLS-MSCHAP,TTLS-MSCHAPV2	"password"	[2]
++"ttls"	TTLS-PAP,TTLS-CHAP,TTLS-MSCHAP,TTLS-MSCHAPV2	"password"	[2]
++"eap-ttls"	TTLS-PAP,TTLS-CHAP,TTLS-MSCHAP,TTLS-MSCHAPV2	"password"	[2]
+ 
+ # Default to EAP-SIM and EAP-AKA based on fixed identity prefixes in phase 2
+ "0"*		AKA	[2]
+diff --git a/hostapd/hostapd.radius_clients b/hostapd/hostapd.radius_clients
+index 398042725..0238c7860 100644
+--- a/hostapd/hostapd.radius_clients
++++ b/hostapd/hostapd.radius_clients
+@@ -1,4 +1,4 @@
+ # RADIUS client configuration for the RADIUS server
+-10.1.2.3	secret passphrase
+-192.168.1.0/24	another very secret passphrase
+-0.0.0.0/0	radius
++# 10.1.2.3	secret passphrase
++# 192.168.1.0/24	another very secret passphrase
++0.0.0.0/0	12345678
+diff --git a/src/common/dhcp.h b/src/common/dhcp.h
+index e38512c24..7dc67d5b8 100644
+--- a/src/common/dhcp.h
++++ b/src/common/dhcp.h
+@@ -39,7 +39,7 @@ struct dhcp_data {
+ } STRUCT_PACKED;
+ 
+ struct bootp_pkt {
+-	struct iphdr iph;
++	struct ip iph;
+ 	struct udphdr udph;
+ 	u8 op;
+ 	u8 htype;
+diff --git a/src/utils/wpa_debug.c b/src/utils/wpa_debug.c
+index 62758d864..f88a88b0a 100644
+--- a/src/utils/wpa_debug.c
++++ b/src/utils/wpa_debug.c
+@@ -77,7 +77,18 @@ void wpa_debug_print_timestamp(void)
+ 			(unsigned int) tv.usec);
+ 	} else
+ #endif /* CONFIG_DEBUG_FILE */
+-	printf("%ld.%06u: ", (long) tv.sec, (unsigned int) tv.usec);
++	char timebuf[32];
++	struct timeval timeval;
++	struct tm *tm;
++
++	memset(timebuf, 0, sizeof(timebuf));
++
++	gettimeofday(&timeval, NULL);
++	tm = localtime(&timeval.tv_sec);
++
++	strftime(timebuf, sizeof(timebuf), "%m-%d %H:%M:%S", tm);
++	printf("%s.%03ld: ", timebuf, timeval.tv_usec / 1000);
++	//printf("%ld.%06u: ", (long) tv.sec, (unsigned int) tv.usec);
+ #endif /* CONFIG_ANDROID_LOG */
+ }
+ 
