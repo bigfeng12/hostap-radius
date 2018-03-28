@@ -1,0 +1,28 @@
+From f1941327fe05eaa7f5ef1033e048bfd3d13cc576 Mon Sep 17 00:00:00 2001
+From: Peiyong Feng <peiyong.feng@spreadtrum.com>
+Date: Mon, 25 Dec 2017 11:18:32 +0800
+Subject: [PATCH] wlantest: decrypte: ignore ADD mismatch
+
+Signed-off-by: Peiyong Feng <peiyong.feng@spreadtrum.com>
+---
+ src/crypto/aes-ccm.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/crypto/aes-ccm.c b/src/crypto/aes-ccm.c
+index cf22778..a443501 100644
+--- a/src/crypto/aes-ccm.c
++++ b/src/crypto/aes-ccm.c
+@@ -204,8 +204,8 @@ int aes_ccm_ad(const u8 *key, size_t key_len, const u8 *nonce,
+ 	aes_encrypt_deinit(aes);
+ 
+ 	if (os_memcmp_const(x, t, M) != 0) {
+-		wpa_printf(MSG_EXCESSIVE, "CCM: Auth mismatch");
+-		return -1;
++		wpa_printf(MSG_EXCESSIVE, "CCM: Auth mismatch ignore...");
++		//return -1;
+ 	}
+ 
+ 	return 0;
+-- 
+1.9.1
+

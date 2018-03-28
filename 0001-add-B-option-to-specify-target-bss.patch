@@ -1,0 +1,231 @@
+From f648dd456d15ad8e64a267139a58c7e5bbf94af2 Mon Sep 17 00:00:00 2001
+From: Peiyong Feng <peiyong.feng@spreadtrum.com>
+Date: Wed, 28 Mar 2018 15:05:23 +0800
+Subject: [PATCH] add -B option to specify target bss
+
+Signed-off-by: Peiyong Feng <peiyong.feng@spreadtrum.com>
+---
+ wlantest/rx_data.c  | 32 +++++++++++++++++++++
+ wlantest/wlantest.c | 82 ++++++++++++++++++++++++++++++++++++++++++++++++++++-
+ wlantest/wlantest.h |  6 ++++
+ 3 files changed, 119 insertions(+), 1 deletion(-)
+
+diff --git a/wlantest/rx_data.c b/wlantest/rx_data.c
+index bafc33f..bb7e40a 100644
+--- a/wlantest/rx_data.c
++++ b/wlantest/rx_data.c
+@@ -623,6 +623,20 @@ static void add_ap_path(struct wlantest *wt, const u8 *bssid,
+ 		tdls->counters[WLANTEST_TDLS_COUNTER_VALID_AP_PATH]++;
+ }
+ 
++int find_target_bss(struct wlantest *wt, const u8 *addr)
++{
++	struct wlantest_target_bss *tb;
++
++	dl_list_for_each(tb, &wt->target_bss, struct wlantest_target_bss, list) {
++		if (os_memcmp(tb->addr, addr, ETH_ALEN) == 0) {
++			wpa_printf(MSG_DEBUG, "found target bss " MACSTR, MAC2STR(tb->addr));
++			return 1;
++		}
++
++	}
++	return 0;
++}
++
+ 
+ void rx_data(struct wlantest *wt, const u8 *data, size_t len)
+ {
+@@ -631,6 +645,8 @@ void rx_data(struct wlantest *wt, const u8 *data, size_t len)
+ 	size_t hdrlen;
+ 	const u8 *qos = NULL;
+ 
++	int has_target_bss = !dl_list_empty(&wt->target_bss);
++
+ 	if (len < 24)
+ 		return;
+ 
+@@ -659,6 +675,10 @@ void rx_data(struct wlantest *wt, const u8 *data, size_t len)
+ 			   MAC2STR(hdr->addr1), MAC2STR(hdr->addr2),
+ 			   MAC2STR(hdr->addr3));
+ 		add_direct_link(wt, hdr->addr3, hdr->addr1, hdr->addr2);
++		if ((has_target_bss) && (!find_target_bss(wt, hdr->addr3))) {
++			wpa_printf(MSG_DEBUG, "Not target bss, ignoring...");
++			break;
++		}
+ 		rx_data_bss(wt, hdr, hdrlen, qos, hdr->addr1, hdr->addr2,
+ 			    data + hdrlen, len - hdrlen);
+ 		break;
+@@ -671,6 +691,10 @@ void rx_data(struct wlantest *wt, const u8 *data, size_t len)
+ 			   MAC2STR(hdr->addr1), MAC2STR(hdr->addr2),
+ 			   MAC2STR(hdr->addr3));
+ 		add_ap_path(wt, hdr->addr2, hdr->addr1, hdr->addr3);
++		if ((has_target_bss) && (!find_target_bss(wt, hdr->addr2))) {
++			wpa_printf(MSG_DEBUG, "Not target bss, ignoring...");
++			break;
++		}
+ 		rx_data_bss(wt, hdr, hdrlen, qos, hdr->addr1, hdr->addr3,
+ 			    data + hdrlen, len - hdrlen);
+ 		break;
+@@ -683,6 +707,10 @@ void rx_data(struct wlantest *wt, const u8 *data, size_t len)
+ 			   MAC2STR(hdr->addr1), MAC2STR(hdr->addr2),
+ 			   MAC2STR(hdr->addr3));
+ 		add_ap_path(wt, hdr->addr1, hdr->addr3, hdr->addr2);
++		if ((has_target_bss) && (!find_target_bss(wt, hdr->addr1))) {
++			wpa_printf(MSG_DEBUG, "Not target bss, ignoring...");
++			break;
++		}
+ 		rx_data_bss(wt, hdr, hdrlen, qos, hdr->addr3, hdr->addr2,
+ 			    data + hdrlen, len - hdrlen);
+ 		break;
+@@ -695,6 +723,10 @@ void rx_data(struct wlantest *wt, const u8 *data, size_t len)
+ 			   MAC2STR(hdr->addr1), MAC2STR(hdr->addr2),
+ 			   MAC2STR(hdr->addr3),
+ 			   MAC2STR((const u8 *) (hdr + 1)));
++		if ((has_target_bss) && (!find_target_bss(wt, hdr->addr3))) {
++			wpa_printf(MSG_DEBUG, "Not target bss, ignoring...");
++			break;
++		}
+ 		rx_data_bss(wt, hdr, hdrlen, qos, hdr->addr1, hdr->addr2,
+ 			    data + hdrlen, len - hdrlen);
+ 		break;
+diff --git a/wlantest/wlantest.c b/wlantest/wlantest.c
+index e46850a..3544e79 100644
+--- a/wlantest/wlantest.c
++++ b/wlantest/wlantest.c
+@@ -60,6 +60,7 @@ static void wlantest_init(struct wlantest *wt)
+ 	dl_list_init(&wt->pmk);
+ 	dl_list_init(&wt->ptk);
+ 	dl_list_init(&wt->wep);
++	dl_list_init(&wt->target_bss);
+ }
+ 
+ 
+@@ -193,6 +194,81 @@ static int add_pmk_file(struct wlantest *wt, const char *pmk_file)
+ 	fclose(f);
+ 	return 0;
+ }
++#if 0
++static int hex2num(char c)
++{
++	if (c >= '0' && c <= '9')
++		return c - '0';
++	if (c >= 'a' && c <= 'f')
++		return c - 'a' + 10;
++	if (c >= 'A' && c <= 'F')
++		return c - 'A' + 10;
++	return -1;
++}
++
++
++static int hex2byte(const char *hex)
++{
++	int a, b;
++	a = hex2num(*hex++);
++	if (a < 0)
++		return -1;
++	b = hex2num(*hex++);
++	if (b < 0)
++		return -1;
++	return (a << 4) | b;
++}
++
++
++static const char * hwaddr_parse(const char *txt, u8 *addr)
++{
++	size_t i;
++
++	for (i = 0; i < ETH_ALEN; i++) {
++		int a;
++
++		a = hex2byte(txt);
++		if (a < 0)
++			return NULL;
++		txt += 2;
++		addr[i] = a;
++		if (i < ETH_ALEN - 1 && *txt++ != ':')
++			return NULL;
++	}
++	return txt;
++}
++
++/**
++ * hwaddr_aton - Convert ASCII string to MAC address (colon-delimited format)
++ * @txt: MAC address as a string (e.g., "00:11:22:33:44:55")
++ * @addr: Buffer for the MAC address (ETH_ALEN = 6 bytes)
++ * Returns: 0 on success, -1 on failure (e.g., string not a MAC address)
++ */
++static int hwaddr_aton(const char *txt, u8 *addr)
++{
++	return hwaddr_parse(txt, addr) ? 0 : -1;
++}
++#endif
++
++static int add_target_bss(struct wlantest *wt, const char *mac)
++{
++	struct wlantest_target_bss *tb;
++
++	tb = os_zalloc(sizeof(*tb));
++
++	if (!tb)
++		return -2;
++
++	if (hwaddr_aton(mac, tb->addr)) {
++		wpa_printf(MSG_DEBUG, "failed to add MAC %s to list", mac);
++		return -1;
++	}
++	dl_list_init(&tb->list);
++	dl_list_add(&wt->target_bss, &tb->list);
++
++	wpa_printf(MSG_DEBUG, "Added target bss: %s", mac);
++	return 0;
++}
+ 
+ 
+ static int add_ptk_file(struct wlantest *wt, const char *ptk_file)
+@@ -367,7 +443,7 @@ int main(int argc, char *argv[])
+ 	wlantest_init(&wt);
+ 
+ 	for (;;) {
+-		c = getopt(argc, argv, "cdf:Fhi:I:L:n:Np:P:qr:R:tT:w:W:");
++		c = getopt(argc, argv, "cdf:Fhi:I:L:n:Np:P:qr:R:tT:w:W:B:");
+ 		if (c < 0)
+ 			break;
+ 		switch (c) {
+@@ -432,6 +508,10 @@ int main(int argc, char *argv[])
+ 			if (add_wep(&wt, optarg) < 0)
+ 				return -1;
+ 			break;
++		case 'B':
++			if (add_target_bss(&wt, optarg) < 0)
++				return -1;
++			break;
+ 		default:
+ 			usage();
+ 			return -1;
+diff --git a/wlantest/wlantest.h b/wlantest/wlantest.h
+index bad005d..6b27607 100644
+--- a/wlantest/wlantest.h
++++ b/wlantest/wlantest.h
+@@ -25,6 +25,11 @@ struct wlantest_radius_secret {
+ 	char secret[MAX_RADIUS_SECRET_LEN];
+ };
+ 
++struct wlantest_target_bss {
++	struct dl_list list;
++	u8 addr[ETH_ALEN];
++};
++
+ struct wlantest_passphrase {
+ 	struct dl_list list;
+ 	char passphrase[64];
+@@ -184,6 +189,7 @@ struct wlantest {
+ 	struct dl_list pmk; /* struct wlantest_pmk */
+ 	struct dl_list ptk; /* struct wlantest_ptk */
+ 	struct dl_list wep; /* struct wlantest_wep */
++	struct dl_list target_bss; /* struct wlantest_target_bss */
+ 
+ 	unsigned int rx_mgmt;
+ 	unsigned int rx_ctrl;
+-- 
+1.9.1
+
